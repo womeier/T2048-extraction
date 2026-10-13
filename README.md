@@ -12,7 +12,7 @@ cd result && python3 -m http.server
 # then open localhost:8000 in the browser
 ```
 
-### State representation
+### State representation in Wasm/JavaScript
 The game state is a string of numbers: the seed, then a `#`, then the 16
 cells of the board separated by commas, row by row (`0` is an empty cell):
 ```
