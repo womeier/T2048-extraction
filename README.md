@@ -4,8 +4,10 @@
 This repo contains a demo based on Laurent Théry's [implementation](https://github.com/thery/T2048) of the game 2048.
 It is extracted to a Wasm binary using CertiRocq.
 
+One can try it at [https://womeier.github.io/T2048-extraction/](https://womeier.github.io/T2048-extraction/).
 
-### Build and run
+
+### Build and run locally
 ```
 nix build
 cd result && python3 -m http.server
@@ -13,7 +15,7 @@ cd result && python3 -m http.server
 ```
 
 ### State representation in Wasm/JavaScript
-The game state is a string of numbers: the seed, then a `#`, then the 16
+The game state is a string: the seed, then a `#`, then the 16
 cells of the board separated by commas, row by row (`0` is an empty cell):
 ```
 seed#c0,c1,...,c15
