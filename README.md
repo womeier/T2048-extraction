@@ -1,5 +1,10 @@
 # Verified implementation of 2048
 
+### About
+This repo contains a demo based on Laurent Théry's [implementation](https://github.com/thery/T2048) of the game 2048.
+It is extracted to a Wasm binary using CertiRocq.
+
+
 ### Build and run
 ```
 nix build
