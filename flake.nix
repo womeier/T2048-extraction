@@ -65,9 +65,10 @@
             src = ./.;
             filter = path: type:
               type == "directory"
+              || lib.hasSuffix ".v" path
               || lib.elem (baseNameOf path) [
-                "extraction.v"
-                "serialization.v"
+                "Makefile"
+                "_RocqProject"
                 "index.html"
                 "index.js"
               ];
@@ -79,11 +80,12 @@
           ];
           buildInputs = [ t2048 ];
 
+          COQBIN = "${rocqPackages.coq}/bin/";
+
           buildPhase = ''
             runHook preBuild
             ulimit -s unlimited 2>/dev/null || true
-            coqc -R theories T2048Web theories/serialization.v
-            coqc -R theories T2048Web theories/extraction.v
+            make -j $NIX_BUILD_CORES
             runHook postBuild
           '';
 
@@ -116,6 +118,7 @@
             rocqPackages.CertiRocq
             rocqPackages.stdlib
             rocqPackages.coq-lsp
+            t2048
             pkgs.gnumake
             pkgs.nodejs_22
           ];
@@ -128,7 +131,7 @@
             echo "  coq:   $(coqc --version | head -1)"
             echo "  node:  $(node --version)"
             echo ""
-            echo "Build the web bundle:  nix build"
+            echo "Build the web bundle:  nix build  (or: make)"
             echo "Serve it:              cd result && python3 -m http.server"
           '';
         };

@@ -1,7 +1,7 @@
-// T2048 front-end — drives the Wasm module compiled by CertiRocq from the
+// T2048 front-end - js bindings for the Wasm module compiled by CertiRocq from the
 // verified T2048 Rocq development (extraction.v).
 //
-// The module exports:
+// The Wasm module exports:
 //   main_function  : sets up the runtime, computes T2048_wasm_api into `result`
 //   result         : global holding the value last returned by any call
 //   mem_ptr        : global, next free address in linear memory (JS may bump it)
@@ -18,7 +18,7 @@
 //   pair      : [0, fst, snd]
 //   closure   : [tag, fidx, env]    fidx indexes the module's export list
 //
-// Calling convention (confirmed against CertiRocq 0.9.1):
+// Calling convention (CertiRocq 0.9.1):
 //   f(env, arg) for a one-argument function; the return value is void,
 //   the result is read from the `result` global afterwards.
 //
@@ -52,17 +52,25 @@ const fail = (msg) => {
 
 let ex;           // module exports
 let names;        // export names, in export order (= function index order)
-let dataView;      // little-endian i32 view of the linear memory (refreshed — memory may grow)
 let api;          // resolved closures: move, init_with_seed
+let memBase;      // mem_ptr watermark taken after main_function: everything
+                   // that stays alive (api record, closure envs) is below it
 let state;         // the game state as a string "seed#c0,...,c15" (source of
                    // truth; rebuilt in Wasm memory for each call)
 let gameOver = false;
 
-const refresh = () => { dataView = new DataView(ex.memory.buffer); };
+// Growing the linear memory detaches its old ArrayBuffer, so a cached
+// DataView goes stale after a grow. Check on every access instead of
+// refreshing at each call site: the identity test is O(1) and can never
+// miss (a stale view's buffer is a different object).
+let dataView = null;
+const view = () =>
+  dataView?.buffer === ex.memory.buffer ? dataView
+                                        : (dataView = new DataView(ex.memory.buffer));
 
 // read the i-th 32-bit word of the block at addr, i.e. the i32 at the
 // byte address addr + 4 * i: tag = ld(p, 0), first field = ld(p, 1), ...
-const ld = (addr, i) => dataView.getInt32(addr + 4 * i, true);
+const ld = (addr, i) => view().getInt32(addr + 4 * i, true);
 
 // --- allocation (shares mem_ptr with the module) ---------------------------
 // Reports "out of memory" when mem_ptr cannot be advanced within the linear
@@ -86,17 +94,18 @@ function alloc(words) {
     } catch {
       outOfMemory();
     }
-    refresh();                            // the old buffer is detached
   }
-  for (let i = 0; i < words.length; i++) dataView.setInt32(addr + 4 * i, words[i], true);
+  for (let i = 0; i < words.length; i++) view().setInt32(addr + 4 * i, words[i], true);
   ex.mem_ptr.value = end;
   return addr;
 }
 
 // --- builders ---------------------------------------------------------------
+const mkPair = (a, b) => alloc([0, a, b]);
+
 // uint63 seed: an 8-byte little-endian i64 cell (two i32 words: low, high).
-// Takes the value as one integer (a BigInt, or a JS number that is an exact
-// integer), fails outside the 63-bit unsigned range, and splits it itself.
+// Takes the value as one integer (a BigInt, or a JS number that is an
+// exact integer), fails outside the 63-bit unsigned range, and splits it itself.
 function mkUint63(n) {
   const v = typeof n === "bigint" ? n : BigInt(n);  // throws on non-integers
   if (v < 0n || 2n ** 63n <= v) {
@@ -104,7 +113,6 @@ function mkUint63(n) {
   }
   return alloc([Number(v % 2n ** 32n), Number(v / 2n ** 32n)]);
 }
-const mkPair = (a, b) => alloc([0, a, b]);
 
 // --- decoder ----------------------------------------------------------------
 function bytesToString(p) {
@@ -132,7 +140,6 @@ function callApi(clos, ...args) {
   // one-argument functions have signature (env, arg); adapt if ever env-less
   if (f.length === args.length) f(...args);
   else f(clos.env, ...args);
-  refresh();                            // memory may have grown
   if (ex.out_of_mem.value === 1) outOfMemory();
   return ex.result.value;
 }
@@ -146,6 +153,12 @@ function readApi() {
   };
   return { move: clos(1), init_with_seed: clos(2) };
 }
+
+// Rewind mem_ptr to the watermark taken after main_function
+// nothing is ever freed in CertiRocq's Wasm backend, there is no GC
+// we just overwrite the data from the previous calls.
+// This is save because uninitialized memory is never read.
+const rewind = () => { ex.mem_ptr.value = memBase; };
 
 // --- persistence (survive F5) ------------------------------------------------
 const SAVE_KEY = "t2048";
@@ -189,6 +202,7 @@ function newGame() {
   crypto.getRandomValues(rnd);
   const seed = (rnd[0] % 2n ** 63n) || 1n;   // 63 random bits, never zero
   try {
+    rewind();
     state = bytesToString(callApi(api.init_with_seed, mkUint63(seed)));
     gameOver = false;
     render();
@@ -201,6 +215,7 @@ function newGame() {
 function play(dir) {
   if (gameOver || state === undefined) return;
   try {
+    rewind();
     const resPtr = callApi(api.move, mkPair(MOVES[dir], bytesFromString(state)));
     state = bytesToString(ld(resPtr, 1));
     const msg = bytesToString(ld(resPtr, 2));
@@ -223,11 +238,10 @@ async function boot() {
     const { instance } = await WebAssembly.instantiate(buffer, { env: {} });
     ex = instance.exports;
     names = Object.keys(ex);
-    refresh();
     ex.main_function();
-    refresh();
     if (ex.out_of_mem.value === 1) return fail("Wasm setup ran out of memory.");
     api = readApi();
+    memBase = ex.mem_ptr.value;
     const saved = restore();
     if (saved) {
       // the outcome is not derived here: the module itself reports "won",
