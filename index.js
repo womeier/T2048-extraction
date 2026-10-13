@@ -230,8 +230,9 @@ async function boot() {
     api = readApi();
     const saved = restore();
     if (saved) {
-      // the outcome is not derived here: the module itself reports "won"
-      // (or "invalid") on the next move, and play() sets gameOver from that
+      // the outcome is not derived here: the module itself reports "won",
+      // "lost" or "invalid" on the next move, and play() sets gameOver from
+      // the terminal ones
       state = saved;
       gameOver = false;
       render();
@@ -242,6 +243,14 @@ async function boot() {
     if (!e.oom) fail("Failed to start the game: " + e);
   }
 }
+
+// console helper: jump to a winning board
+window.setStateWin = () => {
+  state = "5#1024,512,512,0,0,0,0,0,0,0,0,0,0,0,0,0";
+  gameOver = false;
+  render();
+  save();
+};
 
 for (const b of document.querySelectorAll("#controls button")) {
   b.addEventListener("click", () => play(b.dataset.move));
