@@ -5,7 +5,7 @@
 (*    move : T2048.move * state -> state * message                            *)
 (*                                                                            *)
 (*  The state and the messages are lists of bytes; the state encoding         *)
-(*  ("seed,c0,...,c15", seed first, then the 16 cells row by row) and its     *)
+(*  ("seed#c0,...,c15", the seed, then the 16 cells row by row) and its       *)
 (*  round-trip statement serialize_deserialize live in serialization.v.      *)
 (*  The message is one of "invalid", "lost", "won", "continue".               *)
 (*                                                                            *)

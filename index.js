@@ -26,7 +26,7 @@
 //     Inductive move := Rm | Lm | Um | Dm.   (right, left, up, down)
 // encoded in declaration order: Rm = 1, Lm = 3, Um = 5, Dm = 7.
 // The seed is a primitive 63-bit integer, the state the byte list
-// "seed,c0,...,c15" and the message one of "invalid", "lost", "won",
+// "seed#c0,...,c15" and the message one of "invalid", "lost", "won",
 // "continue".
 
 // Tail-call feature detection, adapted from
@@ -54,7 +54,7 @@ let ex;           // module exports
 let names;        // export names, in export order (= function index order)
 let dataView;      // little-endian i32 view of the linear memory (refreshed — memory may grow)
 let api;          // resolved closures: move, init_with_seed
-let state;         // the game state as a string "seed,c0,...,c15" (source of
+let state;         // the game state as a string "seed#c0,...,c15" (source of
                    // truth; rebuilt in Wasm memory for each call)
 let gameOver = false;
 
@@ -151,6 +151,7 @@ function readApi() {
 const SAVE_KEY = "t2048";
 
 function save() {
+  console.log(state);
   try {
     localStorage.setItem(SAVE_KEY, state);
   } catch { /* storage unavailable — play on */ }
@@ -159,7 +160,7 @@ function save() {
 function restore() {
   try {
     const s = localStorage.getItem(SAVE_KEY);
-    if (typeof s !== "string" || !s.includes(",") || s[0] === "{") return null;
+    if (typeof s !== "string" || !s.includes("#")) return null;
     return s;
   } catch {
     return null;
@@ -168,7 +169,7 @@ function restore() {
 
 // --- game -------------------------------------------------------------------
 function render(msg = "continue") {
-  const cells = state.split(",").slice(1);   // first number is the seed
+  const cells = state.split("#")[1].split(",");   // seed, then the 16 cells
   const boardEl = document.getElementById("board");
   boardEl.innerHTML = "";
   for (const v of cells) {

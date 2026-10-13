@@ -1,9 +1,9 @@
 (******************************************************************************)
 (*  T2048 — state serialization                                               *)
 (*                                                                            *)
-(*  The state is a list of bytes holding the numbers of the game separated    *)
-(*  by commas: the seed first, then the 16 cells of the board, row by row —   *)
-(*     "seed,c0,c1,...,c15"                                                   *)
+(*  The state is a list of bytes: the seed, then a '#', then the numbers of    *)
+(*  the game separated by commas — the 16 cells of the board, row by row:     *)
+(*     "seed#c0,c1,...,c15"                                                   *)
 (******************************************************************************)
 
 From Stdlib Require Import NArith List Strings.Byte.
@@ -46,7 +46,7 @@ Fixpoint commas (nums : list N) : list byte :=
   end.
 
 Definition state_of_game (s : N) (b : list (list N)) : state :=
-  commas (s :: List.concat b).
+  List.app (show_N s) (x23 :: commas (List.concat b)).
 
 (* ---- Parsing: comma-separated bytes to numbers ---- *)
 
@@ -54,6 +54,7 @@ Fixpoint parse_nums (l : list byte) (acc : N) : list N :=
   match l with
   | nil => acc :: nil
   | x2c :: l' => acc :: parse_nums l' 0        (* ',' *)
+  | x23 :: l' => acc :: parse_nums l' 0        (* '#' *)
   | x30 :: l' => parse_nums l' (acc * 10 + 0)  (* '0' *)
   | x31 :: l' => parse_nums l' (acc * 10 + 1)  (* '1' *)
   | x32 :: l' => parse_nums l' (acc * 10 + 2)  (* '2' *)
