@@ -67,6 +67,7 @@
               type == "directory"
               || lib.elem (baseNameOf path) [
                 "extraction.v"
+                "serialization.v"
                 "index.html"
                 "index.js"
               ];
@@ -81,7 +82,8 @@
           buildPhase = ''
             runHook preBuild
             ulimit -s unlimited 2>/dev/null || true
-            coqc -R . T2048Web extraction.v
+            coqc -R theories T2048Web theories/serialization.v
+            coqc -R theories T2048Web theories/extraction.v
             runHook postBuild
           '';
 
@@ -89,7 +91,7 @@
             runHook preInstall
             mkdir -p $out
             cp index.html index.js $out/
-            cp T2048Web.extraction.t2048_wasm_api.wasm $out/t2048.wasm
+            cp T2048Web.extraction.T2048_wasm_api.wasm $out/t2048.wasm
             runHook postInstall
           '';
 
@@ -102,7 +104,7 @@
       in
       {
         packages.default = t2048-web;
-        packages.web = t2048-web;
+        packages.t2048-web = t2048-web;
         packages.T2048 = t2048;
         packages.rocq-with-t2048 = rocq-with-t2048;
 
