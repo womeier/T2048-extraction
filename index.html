@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T2048 — a verified 2048</title>
+<style>
+  body {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #faf8ef; color: #776e65;
+    display: flex; flex-direction: column; align-items: center;
+    margin: 0; padding: 2rem 1rem 3rem;
+  }
+  h1 { margin: 0; font-size: 2.6rem; font-weight: 800; }
+  #subtitle { margin: .25rem 0 1.5rem; font-size: .85rem; color: #9c8f80; text-align: center; }
+  #subtitle a { color: #8f7a66; }
+  #board {
+    display: grid; grid-template-columns: repeat(4, 92px); gap: 10px;
+    background: #bbada0; padding: 10px; border-radius: 8px;
+  }
+  .cell {
+    width: 92px; height: 92px; border-radius: 4px; background: #cdc1b4;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.5rem; font-weight: 800; color: #776e65;
+  }
+  .cell[data-v="2"]    { background: #eee4da; }
+  .cell[data-v="4"]    { background: #ede0c8; }
+  .cell[data-v="8"]    { background: #f2b179; color: #f9f6f2; }
+  .cell[data-v="16"]   { background: #f59563; color: #f9f6f2; }
+  .cell[data-v="32"]   { background: #f67c5f; color: #f9f6f2; }
+  .cell[data-v="64"]   { background: #f65e3b; color: #f9f6f2; }
+  .cell[data-v="128"]  { background: #edcf72; color: #f9f6f2; font-size: 2.1rem; }
+  .cell[data-v="256"]  { background: #edcc61; color: #f9f6f2; font-size: 2.1rem; }
+  .cell[data-v="512"]  { background: #edc850; color: #f9f6f2; font-size: 2.1rem; }
+  .cell[data-v="1024"] { background: #edc53f; color: #f9f6f2; font-size: 1.6rem; }
+  .cell[data-v="2048"] { background: #edc22e; color: #f9f6f2; font-size: 1.6rem;
+                         box-shadow: 0 0 20px 6px rgba(237, 194, 46, .45); }
+  #status { min-height: 1.6em; margin: 1.1rem 0 .6rem; font-size: 1.1rem; font-weight: 700; }
+  #status.won  { color: #edc22e; }
+  #status.lost { color: #c0392b; }
+  #controls {
+    display: grid; grid-template-columns: repeat(3, 72px);
+    grid-template-rows: repeat(2, 52px); gap: 8px;
+  }
+  #controls button {
+    border: none; border-radius: 6px; background: #8f7a66; color: #f9f6f2;
+    font-size: 1.4rem; font-weight: 700; cursor: pointer;
+  }
+  #controls button:hover { background: #9f8b77; }
+  #controls button:active { transform: translateY(1px); }
+  #btn-up    { grid-column: 2; grid-row: 1; }
+  #btn-left  { grid-column: 1; grid-row: 2; }
+  #btn-down  { grid-column: 2; grid-row: 2; }
+  #btn-right { grid-column: 3; grid-row: 2; }
+  #btn-new {
+    margin-top: 1.4rem; padding: .65rem 1.6rem; font-size: 1rem;
+    background: #6bb3a0; color: #f9f6f2;
+  }
+  #btn-new:hover { background: #7bc6b2; }
+  #err {
+    display: none; max-width: 36rem; margin-top: 1.2rem;
+    padding: .75rem 1rem; border: 3px solid #c0392b; border-radius: 6px;
+    background: #fdecea; color: #96281b;
+  }
+</style>
+</head>
+<body>
+
+<h1>T2048</h1>
+<p id="subtitle">
+  2048 with the game logic of the verified
+  <a href="https://github.com/thery/T2048">T2048 Rocq development</a>,
+  compiled to WebAssembly by the verified
+  <a href="https://github.com/CertiRocq/certirocq">CertiRocq</a> compiler.
+</p>
+
+<div id="board"></div>
+<p id="status"></p>
+
+<div id="controls">
+  <button id="btn-up"    data-dir="0" aria-label="move up">↑</button>
+  <button id="btn-left"  data-dir="2" aria-label="move left">←</button>
+  <button id="btn-down"  data-dir="1" aria-label="move down">↓</button>
+  <button id="btn-right" data-dir="3" aria-label="move right">→</button>
+</div>
+<button id="btn-new">New game</button>
+
+<div id="err"></div>
+
+<script type="module" src="index.js"></script>
+</body>
+</html>
