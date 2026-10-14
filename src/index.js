@@ -44,10 +44,19 @@ const MESSAGES = {
   continue: "",
 };
 
-const fail = (msg) => {
+// `fatal` is for a game that never started: there is no board worth looking
+// at then, so the empty one and its dead controls go away and the message is
+// the page. Failures during a game keep theirs — the position is still on
+// screen, and out of memory asks for a reload to get it back.
+const fail = (msg, fatal = false) => {
   const el = document.getElementById("err");
   el.textContent = msg;
   el.style.display = "block";
+  if (fatal) {
+    for (const id of ["board", "status", "controls", "btn-new"]) {
+      document.getElementById(id).style.display = "none";
+    }
+  }
 };
 
 let ex;           // module exports
@@ -228,10 +237,20 @@ function play(dir) {
 }
 
 async function boot() {
+  // No WebAssembly at all — iOS/macOS Lockdown Mode turns it off, and so can
+  // an enterprise policy or an extension. The global is then not merely
+  // feature-poor but absent, so this has to come before the tail-call probe:
+  // that one reads `WebAssembly` and would throw a ReferenceError out of
+  // boot() before anything could be reported.
+  if (typeof WebAssembly === "undefined") {
+    return fail("This browser has WebAssembly disabled, and the whole game is " +
+      "a Wasm module. On iPhone, iPad and Mac that is what Lockdown Mode does; " +
+      "otherwise a browser policy or an extension has switched it off.", true);
+  }
   if (!await tailCall()) {
     return fail("This browser does not support Wasm tail calls, which the " +
       "CertiRocq-compiled module needs. Please use a recent Firefox, Chrome " +
-      "or Safari (see webassembly.org/features).");
+      "or Safari (see webassembly.org/features).", true);
   }
   try {
     const buffer = await (await fetch("t2048.wasm")).arrayBuffer();
@@ -239,7 +258,7 @@ async function boot() {
     ex = instance.exports;
     names = Object.keys(ex);
     ex.main_function();
-    if (ex.out_of_mem.value === 1) return fail("Wasm setup ran out of memory.");
+    if (ex.out_of_mem.value === 1) return fail("Wasm setup ran out of memory.", true);
     api = readApi();
     memBase = ex.mem_ptr.value;
     const saved = restore();
@@ -254,7 +273,7 @@ async function boot() {
       newGame();
     }
   } catch (e) {
-    if (!e.oom) fail("Failed to start the game: " + e);
+    if (!e.oom) fail("Failed to start the game: " + e, true);
   }
 }
 

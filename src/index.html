@@ -57,11 +57,12 @@
     background: #6bb3a0; color: #f9f6f2;
   }
   #btn-new:hover { background: #7bc6b2; }
-  #err {
-    display: none; max-width: 36rem; margin-top: 1.2rem;
+  .error {
+    max-width: 36rem; margin-top: 1.2rem;
     padding: .75rem 1rem; border: 3px solid #c0392b; border-radius: 6px;
     background: #fdecea; color: #96281b;
   }
+  #err { display: none; }           /* until index.js reports a failure */
 </style>
 </head>
 <body>
@@ -86,7 +87,23 @@
 </div>
 <button id="btn-new">New game</button>
 
-<div id="err"></div>
+<!-- Scripting off: the board above is 16 empty divs and the buttons do
+     nothing — the game is a Wasm module that index.js loads and drives. The
+     browser parses this element only when scripting is disabled, so the
+     rules below hide the dead game and leave the message as the page, the
+     same shape index.js gives a browser it cannot run on. -->
+<noscript>
+  <style>
+    #board, #status, #controls, #btn-new { display: none; }
+  </style>
+  <p class="error">
+    JavaScript is disabled in this browser. T2048 is a WebAssembly module and
+    needs a little JavaScript to load it, to pass the moves in and to draw
+    the board, so the game cannot run without it.
+  </p>
+</noscript>
+
+<div id="err" class="error"></div>
 
 <script type="module" src="index.js"></script>
 </body>
