@@ -54,7 +54,8 @@ Tail calls are the later of the two, so they [set the minimum](https://webassemb
 nix has no native Windows support. So a custom setup is used with the `msedge` Playwright channel on Windows.
 
 ### Unsupported platforms
-iPhone in [lock-down mode](https://mashable.com/article/lockdown-mode-iphone) disables Wasm, and it thus unspported.
+iPhone in [lockdown mode](https://www.apple.com/uk/newsroom/2022/07/apple-expands-commitment-to-protect-users-from-mercenary-spyware/) disables Wasm in Safari,
+and it is thus unsupported.
 
 ### Testing
 

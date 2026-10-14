@@ -81,7 +81,7 @@
           ]
         );
 
-        # The web bundle: index.html + index.js + the whole game compiled
+        # The web bundle: src/index.html + src/index.js + the whole game compiled
         # to a single Wasm module by CertiRocq's verified Wasm backend.
         t2048-web = pkgs.stdenv.mkDerivation {
           pname = "t2048-web";
@@ -117,7 +117,7 @@
           installPhase = ''
             runHook preInstall
             mkdir -p $out
-            cp index.html index.js $out/
+            cp src/index.html src/index.js $out/
             cp T2048Web.extraction.T2048_wasm_api.wasm $out/t2048.wasm
             runHook postInstall
           '';
