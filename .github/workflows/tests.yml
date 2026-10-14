@@ -1,0 +1,39 @@
+name: E2E tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: e2e — ${{ matrix.system }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # the platforms of nixpkgs' Playwright browser bundle — everything
+        # the build needs exists there; Playwright has no builds for
+        # Intel macOS (x86_64-darwin)
+        include:
+          - runs-on: ubuntu-latest
+            system: x86_64-linux
+          - runs-on: ubuntu-24.04-arm
+            system: aarch64-linux
+          - runs-on: macos-latest
+            system: aarch64-darwin
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            extra-substituters = https://womeier.cachix.org https://coq-community.cachix.org https://coq.cachix.org
+            extra-trusted-public-keys = womeier.cachix.org-1:0R8+V2ZDOk7mKAA+hF2VulnUoM3Qh8jmeDkcV8gw2Rs= coq-community.cachix.org-1:WBDHojv8FM6nI4ZMh43X+2g6j4WpAn+dFhjhWmLCgnA= coq.cachix.org-1:5QW/wwEnD+l2jvN6QRbRRsa4hBHG3QiQQ26cxu1F5tI=
+
+      - name: Run the full e2e suite on ${{ matrix.system }}
+        run: nix build -L .#t2048-e2e-full
+        # quick suite (chromium only, what `nix flake check` runs):
+        #   nix build -L .#checks.${{ matrix.system }}.t2048-e2e
