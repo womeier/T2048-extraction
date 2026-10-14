@@ -3,6 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Nixpkgs 26.11 dropped x86_64-darwin; the 26.05 darwin branch is the
+    # last one that carries it (security fixes until the end of 2026).
+    # Used for that single system — every other one builds from unstable.
+    nixpkgs-x86_64-darwin.url = "github:NixOS/nixpkgs/nixpkgs-26.05-darwin";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -10,23 +14,44 @@
     {
       self,
       nixpkgs,
+      nixpkgs-x86_64-darwin,
       flake-utils,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        lib = nixpkgs.lib;
-        pkgs = import nixpkgs {
+        # Intel macOS builds from the 26.05 darwin branch, the last
+        # nixpkgs that supports it; everything else from unstable.
+        intelDarwin = system == "x86_64-darwin";
+        nixpkgsFor = if intelDarwin then nixpkgs-x86_64-darwin else nixpkgs;
+
+        lib = nixpkgsFor.lib;
+        pkgs = import nixpkgsFor {
           inherit system;
           # CertiRocq depends on CompCert (unfree) for its Clight backend.
           config.allowUnfreePredicate =
             pkg: builtins.elem (lib.getName pkg) [ "compcert" ];
         };
+
+        # One Rocq 9.1 toolchain under two sets of attribute names:
+        # unstable keeps it all in rocqPackages_9_1, while 26.05 still
+        # splits it — the rocq core in rocqPackages_9_1, the Coq-named
+        # packages (coqc, CertiRocq, coq-lsp) and the builders in
+        # coqPackages_9_1. Both sets are the same rocq 9.1.1 build (they
+        # share one stdlib output), so taking each package from the set
+        # that carries it is consistent; it is 9.1.1 either way.
         rocqPackages = pkgs.rocqPackages_9_1;
+        coqPackages = if intelDarwin then pkgs.coqPackages_9_1 else pkgs.rocqPackages_9_1;
+        # the builders and the withPackages wrapper go with those names:
+        # mkCoqDerivation/coq.withPackages on 26.05, the rocq-named ones
+        # on unstable. Same builder, same resulting coq9.1-T2048-dev.
+        mkRocqPackage = if intelDarwin then coqPackages.mkCoqDerivation else rocqPackages.mkRocqDerivation;
+        rocqWithPackages =
+          if intelDarwin then coqPackages.coq.withPackages else rocqPackages.rocq-core.withPackages;
 
         t2048-rev = "8f8b5020b060bc0876cb16a6b8802a9ab21c1673";
 
-        t2048 = rocqPackages.mkRocqDerivation {
+        t2048 = mkRocqPackage {
           pname = "T2048";
           version = "dev";
           owner = "thery";
@@ -40,7 +65,7 @@
 
           useCoq = true;
           namePrefix = [ "coq" ];
-          propagatedBuildInputs = [ rocqPackages.stdlib ];
+          propagatedBuildInputs = [ coqPackages.stdlib ];
 
           meta = {
             description = "A version of the 2048 game for Rocq";
@@ -49,7 +74,7 @@
           };
         };
 
-        rocq-with-t2048 = rocqPackages.rocq-core.withPackages (
+        rocq-with-t2048 = rocqWithPackages (
           ps: [
             ps.stdlib
             t2048
@@ -75,12 +100,12 @@
           };
 
           nativeBuildInputs = [
-            rocqPackages.coq
-            rocqPackages.CertiRocq
+            coqPackages.coq
+            coqPackages.CertiRocq
           ];
           buildInputs = [ t2048 ];
 
-          COQBIN = "${rocqPackages.coq}/bin/";
+          COQBIN = "${coqPackages.coq}/bin/";
 
           buildPhase = ''
             runHook preBuild
@@ -104,18 +129,15 @@
           };
         };
 
-        # The e2e suite runs on the platforms Playwright ships browser
-        # builds for — x86_64-linux, aarch64-linux, aarch64-darwin (the
-        # platforms of nixpkgs' Playwright browser bundle). Playwright has
-        # no browser builds for the remaining eachDefaultSystem platform,
-        # Intel macOS (x86_64-darwin), so the suite (and the playwright-test
-        # runner, which depends on the browser bundle) cannot exist there.
+        # Every system the flake builds for runs the suite: nixpkgs'
+        # Playwright browser bundle covers all four, Intel macOS included
+        # (its browsers come from the 26.05 branch, which still has them).
         e2ePlatforms = [
           "x86_64-linux"
           "aarch64-linux"
           "aarch64-darwin"
+          "x86_64-darwin"
         ];
-        hasE2ePlatform = builtins.elem system e2ePlatforms;
 
         # Playwright end-to-end tests of the final web bundle: the tests
         # serve t2048-web with python's http.server and drive it with the
@@ -190,14 +212,12 @@
           t2048-web = t2048-web;
           T2048 = t2048;
           rocq-with-t2048 = rocq-with-t2048;
-        }
-        # the full suite, every browser of the config's projects: what CI
-        # runs (nix build .#t2048-e2e-full)
-        // lib.optionalAttrs hasE2ePlatform {
+          # the full suite, every browser of the config's projects: what
+          # CI runs (nix build .#t2048-e2e-full)
           t2048-e2e-full = t2048-e2e null;
         };
 
-        checks = lib.optionalAttrs hasE2ePlatform {
+        checks = {
           # the quick suite, chromium only: keeps `nix flake check` fast;
           # CI runs the full suite on every platform
           t2048-e2e = t2048-e2e "chromium";
@@ -207,19 +227,19 @@
           name = "T2048";
           packages = [
             rocqPackages.rocq-core
-            rocqPackages.coq
-            rocqPackages.CertiRocq
-            rocqPackages.stdlib
-            rocqPackages.coq-lsp
+            coqPackages.coq
+            coqPackages.CertiRocq
+            coqPackages.stdlib
+            coqPackages.coq-lsp
             t2048
             pkgs.gnumake
             pkgs.nodejs_22
             pkgs.python3
-          ]
-          # to run the e2e suite by hand: cd tests && playwright test
-          ++ lib.optionals hasE2ePlatform [ pkgs.playwright-test ];
+            # to run the e2e suite by hand: cd tests && playwright test
+            pkgs.playwright-test
+          ];
 
-          COQBIN = "${rocqPackages.coq}/bin/";
+          COQBIN = "${coqPackages.coq}/bin/";
 
           # WebKit's headless EGL in manual runs (`cd tests && playwright
           # test`): same setup as the check targets above — mesa's ICD and
@@ -235,9 +255,7 @@
             echo ""
             echo "Build the web bundle:  nix build  (or: make)"
             echo "Serve it:              cd result && python3 -m http.server"
-            ${lib.optionalString hasE2ePlatform ''
-              echo "End-to-end tests:      nix flake check  (or: cd tests && playwright test)"
-            ''}
+            echo "End-to-end tests:      nix flake check  (or: cd tests && playwright test)"
           '';
         };
       }

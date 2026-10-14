@@ -21,16 +21,24 @@ nixpkgs. Every project runs the whole spec; the device profiles come from
 Playwright's device descriptors (the touch devices exercise the on-screen
 controls).
 
-| project | engine | x86_64-linux | aarch64-linux | aarch64-darwin |
-|---|---|:---:|:---:|:---:|
-| `chromium` — Desktop Chrome | Chromium | ✓ | ✓ | ✓ |
-| `firefox` — Desktop Firefox | Firefox | ✓ | ✓ | ✓ |
-| `webkit` — Desktop Safari | WebKit | ✓ | ✓ | ✓ |
-| `pixel-7` — Pixel 7 (touch) | Chromium | ✓ | ✓ | ✓ |
-| `iphone-14` — iPhone 14 (touch) | WebKit | ✓ | ✓ | ✓ |
+| project | engine | x86_64-linux | aarch64-linux | aarch64-darwin | x86_64-darwin¹ |
+|---|---|:---:|:---:|:---:|:---:|
+| `chromium` — Desktop Chrome | Chromium | ✓ | ✓ | ✓ | ✓ |
+| `firefox` — Desktop Firefox | Firefox | ✓ | ✓ | ✓ | ✓ |
+| `webkit` — Desktop Safari | WebKit | ✓ | ✓ | ✓ | ✓ |
+| `pixel-7` — Pixel 7 (touch) | Chromium | ✓ | ✓ | ✓ | ✓ |
+| `iphone-14` — iPhone 14 (touch) | WebKit | ✓ | ✓ | ✓ | ✓ |
 
 CI runs the full table on every platform, one runner each
-(`.github/workflows/tests.yml`).
+(`.github/workflows/tests.yml`); Intel macOS runs on `macos-15-intel`.
+
+¹ Nixpkgs 26.11 dropped x86_64-darwin, so the flake pins a second
+nixpkgs for that one system: the 26.05 darwin branch, the last release
+that carries the platform (security fixes until the end of 2026) and
+which still ships the whole Playwright browser bundle for it. Every
+other system builds from nixpkgs-unstable. 26.05 keeps the Rocq 9.1
+toolchain under the older `coqPackages_9_1` names (same 9.1.1 build),
+which is the only difference the flake has to bridge.
 
 Two targets:
 - quick — chromium only, what `nix flake check` runs (fast)
