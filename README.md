@@ -22,7 +22,7 @@ seed#c0,c1,...,c15
 ```
 The state is saved to the browser's localStorage after every move so the game survives a reload.
 
-### Platform support and tests
+### Platform support
 The main browsers are supported. In general, we require support for Wasm 2.0 + the Tail call extension.
 Tail calls are the later of the two, so they [set the minimum](https://webassembly.org/features/):
 
@@ -32,11 +32,7 @@ Tail calls are the later of the two, so they [set the minimum](https://webassemb
 | Firefox | 121 |
 | Safari | 18.2 |
 
-The `tests/` folder holds a [Playwright](https://playwright.dev) suite that tests the final web bundle.
-The device profiles come from Playwright's device descriptors (the touch devices exercise the on-screen
-controls).
-
-| browser profile | engine | x86_64-linux | aarch64-linux | aarch64-darwin | x86_64-darwin | windows |
+| device profile | engine | x86_64-linux | aarch64-linux | aarch64-darwin | x86_64-darwin | windows |
 |---|---|:---:|:---:|:---:|:---:|:---:|
 | `chromium` — Desktop Chrome | Chromium | ✓ | ✓ | ✓ | ✓ | — |
 | `firefox` — Desktop Firefox | Firefox | ✓ | ✓ | ✓ | ✓ | — |
@@ -58,11 +54,13 @@ controls).
 nix has no native Windows support. So a custom setup is used with the `msedge` Playwright channel on Windows.
 
 ### Unsupported platforms
-iPhone in [lock-down mode](https://mashable.com/article/lockdown-mode-iphone) disables Wasm
+iPhone in [lock-down mode](https://mashable.com/article/lockdown-mode-iphone) disables Wasm, and it thus unspported.
 
-CI runs the full table on every platform, one runner each
-(`.github/workflows/tests.yml`); Intel macOS runs on `macos-15-intel`, and
-`windows-latest` runs `msedge` on the Edge of its image.
+### Testing
+
+The `tests/` folder holds a [Playwright](https://playwright.dev) suite that tests the final web bundle.
+The device profiles come from Playwright's device descriptors (the touch devices exercise the on-screen
+controls).
 
 Run a single project by hand, from the dev shell after `nix build`:
 ```
