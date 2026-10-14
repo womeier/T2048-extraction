@@ -24,7 +24,13 @@ The state is saved to the browser's localStorage after every move so the game su
 
 ### Platform support and tests
 The extracted Wasm binaries require Wasm 2.0 + the Tail call extension.
-All browsers later than the ones listed [here](https://webassembly.org/features/) in the `Tail Call` row should be supported.
+Tail calls are the later of the two, so they [set the minimum](https://webassembly.org/features/):
+
+| browser | minimum version |
+|---|:---:|
+| Chrome / Edge | 112 |
+| Firefox | 121 |
+| Safari | 18.2 |
 
 The `tests/` folder holds a [Playwright](https://playwright.dev) suite that tests the final web bundle.
 The device profiles come from Playwright's device descriptors (the touch devices exercise the on-screen
