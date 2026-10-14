@@ -23,7 +23,7 @@ seed#c0,c1,...,c15
 The state is saved to the browser's localStorage after every move so the game survives a reload.
 
 ### Platform support and tests
-The extracted Wasm binaries require Wasm 2.0 + the Tail call extension.
+The main browsers are supported. In general, we require support for Wasm 2.0 + the Tail call extension.
 Tail calls are the later of the two, so they [set the minimum](https://webassembly.org/features/):
 
 | browser | minimum version |
@@ -53,10 +53,12 @@ controls).
 | x86_64-darwin | 26.05-darwin | 1.59.1 | 147.0.7727.15 | 148.0.2 | 26.4 |
 | windows | — | 1.63.0, from npm | Edge, latest (currently 154.0.4258.53) | — | — |
 
+
+### Windows
 nix has no native Windows support. So a custom setup is used with the `msedge` Playwright channel on Windows.
-```
-cd tests && npm install && npx playwright test --project=msedge
-```
+
+### Unsupported plaforms
+iPhone in [lock-down mode](https://mashable.com/article/lockdown-mode-iphone) disables Wasm
 
 CI runs the full table on every platform, one runner each
 (`.github/workflows/tests.yml`); Intel macOS runs on `macos-15-intel`, and

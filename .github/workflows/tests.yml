@@ -65,20 +65,34 @@ jobs:
       matrix:
         # one runner per platform the flake builds for; macos-15-intel is
         # the Intel macOS runner (x86_64-darwin), which nixpkgs only still
-        # supports on the 26.05 branch the flake pins for that system
+        # supports on the 26.05 branch the flake pins for that system.
+        #
+        # develop-flags are extra flags for the `nix develop` call below,
+        # and only x86_64-darwin needs any. `nix develop` runs the env
+        # script it generates with the bashInteractive of the *flake's own*
+        # locked `nixpkgs` input (the registry is not consulted), so on that
+        # system it asks nixpkgs-unstable for a bash and gets an error back:
+        # "Nixpkgs 26.11 has dropped support for x86_64-darwin". nix reports
+        # that only as `error (ignored)` and falls back to the `bash` in
+        # PATH, i.e. the system bash 3.2, which cannot parse its script
+        # (`;&`, a bash 4 construct) — the failure this flag prevents.
+        # Pointing the input at the branch the flake already uses for the
+        # system gives the lookup a bash 5 to find; nothing else changes,
+        # since the x86_64-darwin outputs build from nixpkgs-x86_64-darwin
+        # and never read this input.
         include:
           - runs-on: ubuntu-latest
             system: x86_64-linux
-            nixpkgs: nixpkgs-unstable
+            develop-flags: ''
           - runs-on: ubuntu-24.04-arm
             system: aarch64-linux
-            nixpkgs: nixpkgs-unstable
+            develop-flags: ''
           - runs-on: macos-latest
             system: aarch64-darwin
-            nixpkgs: nixpkgs-unstable
+            develop-flags: ''
           - runs-on: macos-15-intel
             system: x86_64-darwin
-            nixpkgs: nixpkgs-26.05-darwin
+            develop-flags: '--override-input nixpkgs github:NixOS/nixpkgs/nixpkgs-26.05-darwin'
     runs-on: ${{ matrix.runs-on }}
     steps:
       # for tests/: the Playwright suite and its config
@@ -87,17 +101,6 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-
-      # `nix develop` sources its generated env script with bashInteractive
-      # from the `nixpkgs` registry entry, and falls back to whatever `bash`
-      # sits in PATH when it cannot get one. On macos-15-intel it cannot: the
-      # default entry is nixpkgs-unstable, which no longer evaluates for
-      # x86_64-darwin (26.11 dropped it), so the lookup fails — nix only
-      # prints `error (ignored)` — and the fallback is the system bash 3.2,
-      # which cannot parse that script (`;&`). Pin the entry to the same
-      # branch the flake pins for the system, which has a bash to run it.
-      - name: Pin the nixpkgs registry to the branch the flake builds from
-        run: nix registry add nixpkgs github:NixOS/nixpkgs/${{ matrix.nixpkgs }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -114,7 +117,7 @@ jobs:
         #   nix build -L .#checks.${{ matrix.system }}.t2048-e2e
         env:
           T2048_APP_DIR: ${{ github.workspace }}/bundle
-        run: nix develop -L .#e2e -c sh -c 'cd tests && playwright test --reporter=line'
+        run: nix develop -L ${{ matrix.develop-flags }} .#e2e -c sh -c 'cd tests && playwright test --reporter=line'
 
   # Windows, the one platform that cannot go through the flake: nix has no
   # native Windows support, so this job builds its environment the ordinary

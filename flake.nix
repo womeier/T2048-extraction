@@ -286,6 +286,17 @@
         # that same bundle). By hand:
         #   nix build && T2048_APP_DIR=$PWD/result \
         #     nix develop .#e2e -c sh -c 'cd tests && playwright test'
+        #
+        # On x86_64-darwin that call needs one more flag:
+        #   nix develop --override-input nixpkgs \
+        #     github:NixOS/nixpkgs/nixpkgs-26.05-darwin .#e2e -c ...
+        # `nix develop` runs its generated env script with bashInteractive
+        # from the flake's own locked `nixpkgs` input, and asking unstable
+        # for an x86_64-darwin bash is an error (26.11 dropped the system)
+        # that nix only reports as `error (ignored)` before falling back to
+        # the system bash 3.2 — which cannot parse that script. The
+        # override hands it the branch this system builds from anyway; the
+        # input is unread by the outputs here, so nothing else changes.
         devShells.e2e = pkgs.mkShell (
           {
             name = "T2048-e2e";
