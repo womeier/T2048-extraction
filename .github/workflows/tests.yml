@@ -7,11 +7,59 @@ on:
   workflow_dispatch:
 
 jobs:
+  build:
+    name: build the web bundle
+    # The bundle (index.html, index.js, t2048.wasm) is platform-independent:
+    # the Wasm module CertiRocq emits is the same everywhere. So it is built
+    # once, here, and every e2e job below tests that one artifact — the
+    # runners differ in their browsers, not in the code under test. Built on
+    # x86_64-linux because that is the platform the public Rocq caches cover,
+    # which keeps compcert and certirocq out of the critical path.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The public Rocq caches carry compcert and certirocq for
+      # x86_64-linux, which is why the bundle is built on this platform.
+      # They can lag a nixpkgs bump though, so what this job builds also
+      # goes to the womeier cache, and the next run substitutes it from
+      # there. Without a token (pull requests from forks) every cache stays
+      # read-only and the job still works.
+      - uses: cachix/cachix-action@v17
+        with:
+          name: womeier
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          extraPullNames: coq-community,coq
+
+      # compcert and certirocq are the expensive part of this build and are
+      # never compiled in CI: --max-jobs 0 forbids building locally, so this
+      # either fetches them from a cache above (compcert is propagated, so
+      # the one fetch covers both) or fails right here — a clear failure in
+      # seconds beats an hour of compiling CompCert. If it does fail, the
+      # caches have not caught up with flake.lock yet: build it once
+      # somewhere with the toolchain and `cachix push womeier ./result`.
+      - name: Fetch compcert and certirocq, never build them
+        run: nix build -L --no-link --max-jobs 0 .#CertiRocq
+
+      - name: Build the bundle
+        run: |
+          out=$(nix build -L --no-link --print-out-paths .#t2048-web)
+          mkdir -p bundle
+          cp "$out"/index.html "$out"/index.js "$out"/t2048.wasm bundle/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: t2048-web
+          path: bundle/
+          if-no-files-found: error
+
   e2e:
     name: e2e — ${{ matrix.system }}
-    # also lets the dev-shell step below test for the token's presence
-    env:
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -29,42 +77,26 @@ jobs:
             system: x86_64-darwin
     runs-on: ${{ matrix.runs-on }}
     steps:
+      # for tests/: the Playwright suite and its config
       - uses: actions/checkout@v4
 
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Push what this job builds to the womeier cache, so the next run
-      # substitutes it — in particular compcert and certirocq, which only
-      # x86_64-linux gets from coq-community. Without a token (pull
-      # requests from forks) both caches stay read-only for pulling and
-      # the job still works.
-      - uses: cachix/cachix-action@v17
+      - uses: actions/download-artifact@v4
         with:
-          name: womeier
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          # the public Rocq caches, for what they do cover
-          extraPullNames: coq-community,coq
-
-      # The daemon above pushes what the job builds, which covers the
-      # build closure but not the dev shell: coq-lsp, playwright-test and
-      # the rest of `nix develop` are never built here. Realise the shell
-      # into a profile and push that closure too, so a contributor with
-      # the womeier cache configured gets the whole environment
-      # substituted. Skipped without a token (pull requests from forks).
-      - name: Cache the dev shell closure
-        if: env.CACHIX_AUTH_TOKEN != ''
-        run: |
-          nix develop --profile dev-profile -c true
-          cachix push womeier dev-profile
+          name: t2048-web
+          path: bundle
 
       - name: Run the full e2e suite on ${{ matrix.system }}
-        # -L streams the run; the cat repeats the report at the end of the
-        # job log, so the platform, the browsers and the per-test results
-        # are the last thing in it
-        run: |
-          out=$(nix build -L --no-link --print-out-paths .#t2048-e2e-full)
-          cat "$out/report"
-        # quick suite (chromium only, what `nix flake check` runs):
+        # The e2e shell is the Playwright runner, its browsers and python —
+        # no Rocq toolchain, so this job builds none of the project; it
+        # tests the bundle from the build job above. The line reporter
+        # streams the platform, the browsers and the per-test results into
+        # the job log.
+        #   quick suite by hand (chromium only, what `nix flake check` runs):
         #   nix build -L .#checks.${{ matrix.system }}.t2048-e2e
+        env:
+          T2048_APP_DIR: ${{ github.workspace }}/bundle
+        run: nix develop -L .#e2e -c sh -c 'cd tests && playwright test --reporter=line'

@@ -139,6 +139,22 @@
           "x86_64-darwin"
         ];
 
+        # WebKit's headless WPE backend needs an EGL display, but its
+        # libEGL is libglvnd, which finds no vendor ICD in a pure nix
+        # environment (in the build sandbox there is no host /usr to bridge
+        # to, nixGL-style, and no X/Wayland or GPU either). Hand it nixpkgs
+        # mesa's ICD and the surfaceless platform: software GL from the
+        # store, the same everywhere — reproducible, GPU-less. What the
+        # tests need is a working EGL display, not the host GPU, so software
+        # rendering is the answer here rather than a bridge to host drivers
+        # — which the sandboxed check targets could not reach anyway.
+        # Shared by the check targets and the shells below, so manual runs
+        # (`cd tests && playwright test`) behave the same.
+        eglEnv = {
+          __EGL_VENDOR_LIBRARY_DIRS = "${pkgs.mesa}/share/glvnd/egl_vendor.d";
+          EGL_PLATFORM = "surfaceless";
+        };
+
         # Playwright end-to-end tests of the final web bundle: the tests
         # serve t2048-web with python's http.server and drive it with the
         # Playwright runner and browsers from nixpkgs — no npm install, no
@@ -152,59 +168,56 @@
           let
             full = projectName == null;
           in
-          pkgs.stdenv.mkDerivation {
-            pname = if full then "t2048-e2e-full" else "t2048-e2e-${projectName}";
-            version = "dev";
-            src = ./tests;
+          pkgs.stdenv.mkDerivation (
+            {
+              pname = if full then "t2048-e2e-full" else "t2048-e2e-${projectName}";
+              version = "dev";
+              src = ./tests;
 
-            nativeBuildInputs = [
-              pkgs.playwright-test
-              pkgs.python3
-            ];
+              nativeBuildInputs = [
+                pkgs.playwright-test
+                pkgs.python3
+              ];
 
-            # The application under test: the final t2048-web bundle
-            # (index.html, index.js, t2048.wasm), served by the test suite.
-            T2048_APP_DIR = "${t2048-web}";
+              # The application under test: the final t2048-web bundle
+              # (index.html, index.js, t2048.wasm), served by the test suite.
+              T2048_APP_DIR = "${t2048-web}";
 
-            buildPhase = ''
-              runHook preBuild
-              export CI=1                       # always start our own server
-              export HOME="$TMPDIR"             # browsers want a writable home
-              export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
-              # WebKit's headless WPE backend needs an EGL display, but its
-              # libEGL is libglvnd, which finds no vendor ICD in the pure
-              # sandbox (there is no host /usr to bridge to, nixGL-style,
-              # and no X/Wayland or GPU either). Hand it nixpkgs mesa's ICD
-              # and the surfaceless platform: software GL from the store,
-              # the same everywhere — reproducible, GPU-less.
-              export __EGL_VENDOR_LIBRARY_DIRS="${pkgs.mesa}/share/glvnd/egl_vendor.d"
-              export EGL_PLATFORM=surfaceless
-              # stream the run and write it to $out/report, so a successful
-              # build still shows its results:
-              #   nix build .#t2048-e2e-full && cat result/report
-              set -o pipefail
-              {
-                echo "Running the T2048 e2e tests on ${system}: ${
-                  if full then "all browsers — the full suite" else "${projectName} — the quick suite"
-                }"
-                playwright test --reporter=line ${lib.optionalString (!full) "--project=${projectName}"} 2>&1
-              } | tee report
-              runHook postBuild
-            '';
+              buildPhase = ''
+                runHook preBuild
+                export CI=1                       # always start our own server
+                export HOME="$TMPDIR"             # browsers want a writable home
+                export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
+                # (WebKit's EGL comes from eglEnv above, as derivation attrs)
 
-            installPhase = ''
-              runHook preInstall
-              mkdir -p $out
-              cp report $out/report
-              runHook postInstall
-            '';
+                # stream the run and write it to $out/report, so a successful
+                # build still shows its results:
+                #   nix build .#t2048-e2e-full && cat result/report
+                set -o pipefail
+                {
+                  echo "Running the T2048 e2e tests on ${system}: ${
+                    if full then "all browsers — the full suite" else "${projectName} — the quick suite"
+                  }"
+                  playwright test --reporter=line ${lib.optionalString (!full) "--project=${projectName}"} 2>&1
+                } | tee report
+                runHook postBuild
+              '';
 
-            meta = {
-              description = "Playwright e2e tests of the T2048 web build (${if full then "all browsers" else projectName})";
-              license = lib.licenses.mit;
-              platforms = e2ePlatforms;
-            };
-          };
+              installPhase = ''
+                runHook preInstall
+                mkdir -p $out
+                cp report $out/report
+                runHook postInstall
+              '';
+
+              meta = {
+                description = "Playwright e2e tests of the T2048 web build (${if full then "all browsers" else projectName})";
+                license = lib.licenses.mit;
+                platforms = e2ePlatforms;
+              };
+            }
+            // eglEnv
+          );
       in
       {
         packages = {
@@ -212,6 +225,14 @@
           t2048-web = t2048-web;
           T2048 = t2048;
           rocq-with-t2048 = rocq-with-t2048;
+          # The heavy prebuilt dependency, exposed so CI can fetch it
+          # substitute-only before building anything:
+          #   nix build --max-jobs 0 .#CertiRocq
+          # CompCert comes with it (propagated), so that one fetch covers
+          # both — and never compiles them. Also how to seed a cache by
+          # hand when the public ones lag a nixpkgs bump:
+          #   nix build .#CertiRocq && cachix push womeier ./result
+          CertiRocq = coqPackages.CertiRocq;
           # the full suite, every browser of the config's projects: what
           # CI runs (nix build .#t2048-e2e-full)
           t2048-e2e-full = t2048-e2e null;
@@ -223,41 +244,58 @@
           t2048-e2e = t2048-e2e "chromium";
         };
 
-        devShells.default = pkgs.mkShell {
-          name = "T2048";
-          packages = [
-            rocqPackages.rocq-core
-            coqPackages.coq
-            coqPackages.CertiRocq
-            coqPackages.stdlib
-            coqPackages.coq-lsp
-            t2048
-            pkgs.gnumake
-            pkgs.nodejs_22
-            pkgs.python3
-            # to run the e2e suite by hand: cd tests && playwright test
-            pkgs.playwright-test
-          ];
+        devShells.default = pkgs.mkShell (
+          {
+            name = "T2048";
+            packages = [
+              rocqPackages.rocq-core
+              coqPackages.coq
+              coqPackages.CertiRocq
+              coqPackages.stdlib
+              coqPackages.coq-lsp
+              t2048
+              pkgs.gnumake
+              pkgs.nodejs_22
+              pkgs.python3
+              # to run the e2e suite by hand: cd tests && playwright test
+              pkgs.playwright-test
+            ];
 
-          COQBIN = "${coqPackages.coq}/bin/";
+            COQBIN = "${coqPackages.coq}/bin/";
 
-          # WebKit's headless EGL in manual runs (`cd tests && playwright
-          # test`): same setup as the check targets above — mesa's ICD and
-          # the surfaceless platform, so it works on headless hosts too.
-          __EGL_VENDOR_LIBRARY_DIRS = "${pkgs.mesa}/share/glvnd/egl_vendor.d";
-          EGL_PLATFORM = "surfaceless";
+            shellHook = ''
+              echo "T2048 development environment"
+              echo "  rocq:  $(rocq --version | head -1)"
+              echo "  coq:   $(coqc --version | head -1)"
+              echo "  node:  $(node --version)"
+              echo ""
+              echo "Build the web bundle:  nix build  (or: make)"
+              echo "Serve it:              cd result && python3 -m http.server"
+              echo "End-to-end tests:      nix flake check  (or: cd tests && playwright test)"
+            '';
+          }
+          // eglEnv
+        );
 
-          shellHook = ''
-            echo "T2048 development environment"
-            echo "  rocq:  $(rocq --version | head -1)"
-            echo "  coq:   $(coqc --version | head -1)"
-            echo "  node:  $(node --version)"
-            echo ""
-            echo "Build the web bundle:  nix build  (or: make)"
-            echo "Serve it:              cd result && python3 -m http.server"
-            echo "End-to-end tests:      nix flake check  (or: cd tests && playwright test)"
-          '';
-        };
+        # The e2e runner alone: the Playwright runner, its browsers and
+        # python's http.server — no Rocq toolchain, so nothing of the
+        # project is built to enter it. The bundle under test comes from
+        # outside, through T2048_APP_DIR, which is how CI tests one bundle
+        # on every platform (the Wasm is platform-independent: it is built
+        # once on x86_64-linux and the browsers of each runner then drive
+        # that same bundle). By hand:
+        #   nix build && T2048_APP_DIR=$PWD/result \
+        #     nix develop .#e2e -c sh -c 'cd tests && playwright test'
+        devShells.e2e = pkgs.mkShell (
+          {
+            name = "T2048-e2e";
+            packages = [
+              pkgs.playwright-test
+              pkgs.python3
+            ];
+          }
+          // eglEnv
+        );
       }
     );
 }

@@ -21,37 +21,43 @@ nixpkgs. Every project runs the whole spec; the device profiles come from
 Playwright's device descriptors (the touch devices exercise the on-screen
 controls).
 
-| project | engine | x86_64-linux | aarch64-linux | aarch64-darwin | x86_64-darwin¹ |
+| project | engine | x86_64-linux | aarch64-linux | aarch64-darwin | x86_64-darwin |
 |---|---|:---:|:---:|:---:|:---:|
-| `chromium` — Desktop Chrome | Chromium | ✓ | ✓ | ✓ | ✓ |
-| `firefox` — Desktop Firefox | Firefox | ✓ | ✓ | ✓ | ✓ |
-| `webkit` — Desktop Safari | WebKit | ✓ | ✓ | ✓ | ✓ |
-| `pixel-7` — Pixel 7 (touch) | Chromium | ✓ | ✓ | ✓ | ✓ |
-| `iphone-14` — iPhone 14 (touch) | WebKit | ✓ | ✓ | ✓ | ✓ |
+| `chromium` — Desktop Chrome | Chromium 153.0.8010.12 | ✓ | ✓ | ✓ | ✓ |
+| `firefox` — Desktop Firefox | Firefox 155.0 | ✓ | ✓ | ✓ | ✓ |
+| `webkit` — Desktop Safari | WebKit 26.6 | ✓ | ✓ | ✓ | ✓ |
+| `pixel-7` — Pixel 7 (touch) | Chromium 153.0.8010.12 | ✓ | ✓ | ✓ | ✓ |
+| `iphone-14` — iPhone 14 (touch) | WebKit 26.6 | ✓ | ✓ | ✓ | ✓ |
+
+The versions are the ones the pinned nixpkgs ships, so they move with
+`flake.lock`: the table is Playwright 1.63.0 from nixpkgs-unstable.
+x86_64-darwin is the exception — it builds from the 26.05 darwin branch,
+Playwright 1.59.1, which carries Chromium 147.0.7727.15, Firefox 148.0.2
+and WebKit 26.4.
 
 CI runs the full table on every platform, one runner each
-(`.github/workflows/tests.yml`); Intel macOS runs on `macos-15-intel`.
+(`.github/workflows/tests.yml`); Intel macOS runs on `macos-15-intel`. The
+bundle itself is built once, on x86_64-linux — the Wasm module is
+platform-independent, so the runners differ in their browsers, not in the
+code under test: the build job uploads index.html, index.js and t2048.wasm
+as an artifact and each e2e job tests that one artifact. Those jobs build
+none of the project; they enter the e2e shell (the Playwright runner, its
+browsers and python, no Rocq toolchain) and point it at the bundle:
+```
+nix build && T2048_APP_DIR=$PWD/result \
+  nix develop .#e2e -c sh -c 'cd tests && playwright test'
+```
+compcert and certirocq are never compiled in CI: the build job fetches them
+substitute-only (`nix build --max-jobs 0 .#CertiRocq`, which fails instead
+of building) from the public Rocq caches, or from the womeier cache, which
+that same job pushes to so a nixpkgs bump the public ones have not caught
+up with is covered.
 
-¹ Nixpkgs 26.11 dropped x86_64-darwin, so the flake pins a second
-nixpkgs for that one system: the 26.05 darwin branch, the last release
-that carries the platform (security fixes until the end of 2026) and
-which still ships the whole Playwright browser bundle for it. Every
-other system builds from nixpkgs-unstable. 26.05 keeps the Rocq 9.1
-toolchain under the older `coqPackages_9_1` names (same 9.1.1 build),
-which is the only difference the flake has to bridge.
-
-Two targets:
+Two nix targets build the bundle and run the suite against it in one go,
+sandboxed — the local path, where rebuilding the project is the point:
 - quick — chromium only, what `nix flake check` runs (fast)
 - full — every project of the table: `nix build -L .#t2048-e2e-full`, then
-  `cat result/report` for the platform, the browsers and the results (CI runs
-  the full build)
-
-WebKit's headless EGL renders with nixpkgs mesa, software: its libEGL is
-libglvnd, which finds no vendor ICD in a pure nix environment, so the
-targets set `__EGL_VENDOR_LIBRARY_DIRS` to mesa's ICD and the surfaceless
-platform. (Bridging to host drivers, [nixGL](https://github.com/nix-community/nixGL)-style,
-cannot serve the sandboxed check targets: there is no host GL to bridge
-to — and the tests need a working EGL display, not the host GPU.)
+  `cat result/report` for the platform, the browsers and the results
 
 Run a single project by hand, from the dev shell after `nix build`:
 ```
