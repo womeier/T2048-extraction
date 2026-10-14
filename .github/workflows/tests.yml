@@ -69,12 +69,16 @@ jobs:
         include:
           - runs-on: ubuntu-latest
             system: x86_64-linux
+            nixpkgs: nixpkgs-unstable
           - runs-on: ubuntu-24.04-arm
             system: aarch64-linux
+            nixpkgs: nixpkgs-unstable
           - runs-on: macos-latest
             system: aarch64-darwin
+            nixpkgs: nixpkgs-unstable
           - runs-on: macos-15-intel
             system: x86_64-darwin
+            nixpkgs: nixpkgs-26.05-darwin
     runs-on: ${{ matrix.runs-on }}
     steps:
       # for tests/: the Playwright suite and its config
@@ -83,6 +87,17 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # `nix develop` sources its generated env script with bashInteractive
+      # from the `nixpkgs` registry entry, and falls back to whatever `bash`
+      # sits in PATH when it cannot get one. On macos-15-intel it cannot: the
+      # default entry is nixpkgs-unstable, which no longer evaluates for
+      # x86_64-darwin (26.11 dropped it), so the lookup fails — nix only
+      # prints `error (ignored)` — and the fallback is the system bash 3.2,
+      # which cannot parse that script (`;&`). Pin the entry to the same
+      # branch the flake pins for the system, which has a bash to run it.
+      - name: Pin the nixpkgs registry to the branch the flake builds from
+        run: nix registry add nixpkgs github:NixOS/nixpkgs/${{ matrix.nixpkgs }}
 
       - uses: actions/download-artifact@v4
         with:
