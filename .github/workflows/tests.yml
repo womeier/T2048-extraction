@@ -9,6 +9,9 @@ on:
 jobs:
   e2e:
     name: e2e — ${{ matrix.system }}
+    # also lets the dev-shell step below test for the token's presence
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -31,17 +34,30 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          extra_nix_config: |
-            extra-substituters = https://womeier.cachix.org https://coq-community.cachix.org https://coq.cachix.org
-            extra-trusted-public-keys = womeier.cachix.org-1:0R8+V2ZDOk7mKAA+hF2VulnUoM3Qh8jmeDkcV8gw2Rs= coq-community.cachix.org-1:WBDHojv8FM6nI4ZMh43X+2g6j4WpAn+dFhjhWmLCgnA= coq.cachix.org-1:5QW/wwEnD+l2jvN6QRbRRsa4hBHG3QiQQ26cxu1F5tI=
 
       # Push what this job builds to the womeier cache, so the next run
-      # In particular compcert and certirocq
-      # stays read-only, as configured above, and the job still works.
+      # substitutes it — in particular compcert and certirocq, which only
+      # x86_64-linux gets from coq-community. Without a token (pull
+      # requests from forks) both caches stay read-only for pulling and
+      # the job still works.
       - uses: cachix/cachix-action@v17
         with:
           name: womeier
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # the public Rocq caches, for what they do cover
+          extraPullNames: coq-community,coq
+
+      # The daemon above pushes what the job builds, which covers the
+      # build closure but not the dev shell: coq-lsp, playwright-test and
+      # the rest of `nix develop` are never built here. Realise the shell
+      # into a profile and push that closure too, so a contributor with
+      # the womeier cache configured gets the whole environment
+      # substituted. Skipped without a token (pull requests from forks).
+      - name: Cache the dev shell closure
+        if: env.CACHIX_AUTH_TOKEN != ''
+        run: |
+          nix develop --profile dev-profile -c true
+          cachix push womeier dev-profile
 
       - name: Run the full e2e suite on ${{ matrix.system }}
         # -L streams the run; the cat repeats the report at the end of the
