@@ -35,6 +35,14 @@ jobs:
             extra-substituters = https://womeier.cachix.org https://coq-community.cachix.org https://coq.cachix.org
             extra-trusted-public-keys = womeier.cachix.org-1:0R8+V2ZDOk7mKAA+hF2VulnUoM3Qh8jmeDkcV8gw2Rs= coq-community.cachix.org-1:WBDHojv8FM6nI4ZMh43X+2g6j4WpAn+dFhjhWmLCgnA= coq.cachix.org-1:5QW/wwEnD+l2jvN6QRbRRsa4hBHG3QiQQ26cxu1F5tI=
 
+      # Push what this job builds to the womeier cache, so the next run
+      # In particular compcert and certirocq
+      # stays read-only, as configured above, and the job still works.
+      - uses: cachix/cachix-action@v17
+        with:
+          name: womeier
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
       - name: Run the full e2e suite on ${{ matrix.system }}
         # -L streams the run; the cat repeats the report at the end of the
         # job log, so the platform, the browsers and the per-test results
