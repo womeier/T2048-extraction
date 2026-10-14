@@ -14,7 +14,8 @@
 // Projects: the three browser engines as desktop profiles, plus touch
 // devices from Playwright's device descriptors (Pixel 7 for
 // Android/Chromium, iPhone 14 for iOS/WebKit) — the on-screen controls
-// are the touch interface, and every project runs the whole spec.
+// are the touch interface, and every project runs the whole spec. On
+// Windows there is one more, `msedge`; see below.
 const { defineConfig, devices } = require('@playwright/test');
 const path = require('node:path');
 
@@ -25,6 +26,10 @@ const appDir = process.env.T2048_APP_DIR
 const port = Number(process.env.T2048_PORT || 8123);
 const baseURL = `http://127.0.0.1:${port}`;
 
+// The bundle is served by python's http.server; Windows installs the
+// interpreter as `python`, everywhere else it is `python3`.
+const python = process.platform === 'win32' ? 'python' : 'python3';
+
 const projects = [
   { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
@@ -32,6 +37,18 @@ const projects = [
   { name: 'pixel-7', use: { ...devices['Pixel 7'] } },
   { name: 'iphone-14', use: { ...devices['iPhone 14'] } },
 ];
+
+// Edge, on Windows only. Nix has no Windows support, so that platform
+// cannot take its browsers from nixpkgs the way the five projects above
+// do; `channel: 'msedge'` drives the Edge installed on the machine
+// instead (on the CI runner, the one its image ships). Hence the guard:
+// off Windows the channel points at a browser that is not there.
+if (process.platform === 'win32') {
+  projects.push({
+    name: 'msedge',
+    use: { ...devices['Desktop Edge'], channel: 'msedge' },
+  });
+}
 
 // Every run reports the platform it ran on: the suite exercises real
 // browser engines on the host (Wasm tail calls), so this matters. The
@@ -57,7 +74,7 @@ module.exports = defineConfig({
   },
   projects,
   webServer: {
-    command: `python3 -m http.server ${port} --directory ${JSON.stringify(appDir)}`,
+    command: `${python} -m http.server ${port} --directory ${JSON.stringify(appDir)}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     stdout: 'ignore',

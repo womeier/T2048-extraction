@@ -115,3 +115,48 @@ jobs:
         env:
           T2048_APP_DIR: ${{ github.workspace }}/bundle
         run: nix develop -L .#e2e -c sh -c 'cd tests && playwright test --reporter=line'
+
+  # Windows, the one platform that cannot go through the flake: nix has no
+  # native Windows support, so this job builds its environment the ordinary
+  # way — node and python from the runner image, the Playwright runner from
+  # npm (pinned to 1.63.0 in tests/package.json, the version nixpkgs ships)
+  # — and drives the Edge the image already has. It tests the very same
+  # bundle as the jobs above. What it gives up is their reproducibility:
+  # Edge's version floats with the runner image, and the runner comes from
+  # the npm registry rather than from flake.lock.
+  e2e-windows:
+    name: e2e — windows (Edge)
+    needs: build
+    runs-on: windows-latest
+    steps:
+      # for tests/: the Playwright suite, its config and package.json
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22          # the version the dev shell has
+
+      # for the webServer of the Playwright config: python -m http.server
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: t2048-web
+          path: bundle
+
+      - name: Install the Playwright runner
+        working-directory: tests
+        # No browsers are downloaded: the msedge project is a channel, i.e.
+        # the Edge installed on the machine, so the runner is all that is
+        # needed here.
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+        run: npm install --no-audit --no-fund
+
+      - name: Run the Edge project on windows
+        working-directory: tests
+        env:
+          T2048_APP_DIR: ${{ github.workspace }}\bundle
+        run: npx playwright test --project=msedge --reporter=line

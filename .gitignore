@@ -38,3 +38,4 @@ Makefile.rocq.conf
 
 result
 test-results/
+node_modules/
