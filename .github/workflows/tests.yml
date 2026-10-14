@@ -36,6 +36,11 @@ jobs:
             extra-trusted-public-keys = womeier.cachix.org-1:0R8+V2ZDOk7mKAA+hF2VulnUoM3Qh8jmeDkcV8gw2Rs= coq-community.cachix.org-1:WBDHojv8FM6nI4ZMh43X+2g6j4WpAn+dFhjhWmLCgnA= coq.cachix.org-1:5QW/wwEnD+l2jvN6QRbRRsa4hBHG3QiQQ26cxu1F5tI=
 
       - name: Run the full e2e suite on ${{ matrix.system }}
-        run: nix build -L .#t2048-e2e-full
+        # -L streams the run; the cat repeats the report at the end of the
+        # job log, so the platform, the browsers and the per-test results
+        # are the last thing in it
+        run: |
+          out=$(nix build -L --no-link --print-out-paths .#t2048-e2e-full)
+          cat "$out/report"
         # quick suite (chromium only, what `nix flake check` runs):
         #   nix build -L .#checks.${{ matrix.system }}.t2048-e2e
