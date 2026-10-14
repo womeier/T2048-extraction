@@ -57,7 +57,7 @@ controls).
 ### Windows
 nix has no native Windows support. So a custom setup is used with the `msedge` Playwright channel on Windows.
 
-### Unsupported plaforms
+### Unsupported platforms
 iPhone in [lock-down mode](https://mashable.com/article/lockdown-mode-iphone) disables Wasm
 
 CI runs the full table on every platform, one runner each
