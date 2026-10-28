@@ -2,7 +2,7 @@
 (*  T2048 — Wasm extraction via CertiRocq                                     *)
 (*                                                                            *)
 (*    init_with_seed : uint63 -> state                                        *)
-(*    move : T2048.move * state -> state * message                            *)
+(*    next : T2048.move * state -> state * message                            *)
 (*                                                                            *)
 (*  The state and the messages are lists of bytes; the state encoding         *)
 (*  ("seed#c0,...,c15", the seed, then the 16 cells row by row) and its       *)
@@ -26,7 +26,7 @@ From CertiRocq.Plugin Require Import CertiRocq.
 
 Import ListNotations.
 
-(* Messages reported by move, one byte per character *)
+(* Messages reported by next, one byte per character *)
 Definition message := list byte.
 
 Definition m_invalid  : message := ["i"%byte; "n"%byte; "v"%byte; "a"%byte; "l"%byte; "i"%byte; "d"%byte].
@@ -67,7 +67,7 @@ Definition init_with_seed (s : Uint63.int) : state :=
   | None => state_of_game (seed_N s) (make_board size)
   end.
 
-Definition move (p : T2048.move * state) : state * message :=
+Definition next (p : T2048.move * state) : state * message :=
   let '(m, st) := p in
   let '(s, b) := game_of_state st in
   match next_board size s gen_values target m b with
@@ -86,9 +86,9 @@ Definition dead_board : list (list N) :=
   (4 :: 2 :: 4 :: 2 :: nil) :: nil.
 
 Eval vm_compute in (game_of_state (init_with_seed 12345%uint63)).
-Eval vm_compute in (move (Rm, init_with_seed 12345%uint63)).   (* continue *)
-Eval vm_compute in (move (Um, init_with_seed 12345%uint63)).   (* continue *)
-Eval vm_compute in (move (Rm, state_of_game 42 dead_board)).  (* lost *)
+Eval vm_compute in (next (Rm, init_with_seed 12345%uint63)).   (* continue *)
+Eval vm_compute in (next (Um, init_with_seed 12345%uint63)).   (* continue *)
+Eval vm_compute in (next (Rm, state_of_game 42 dead_board)).  (* lost *)
 
 (************************* EXTRACTION ****************************************************)
 
@@ -96,12 +96,12 @@ Eval vm_compute in (move (Rm, state_of_game 42 dead_board)).  (* lost *)
    The record gives the JavaScript side a single block holding one
    closure per field, in field order. *)
 Record wasm_api := MkWasmApi {
-  api_move           : T2048.move * state -> state * message;
+  api_next           : T2048.move * state -> state * message;
   api_init_with_seed : Uint63.int -> state
 }.
 
 Definition T2048_wasm_api : wasm_api :=
-  {| api_move := move;
+  {| api_next := next;
      api_init_with_seed := init_with_seed |}.
 
 CertiRocq Compile Wasm T2048_wasm_api.
