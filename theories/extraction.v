@@ -73,7 +73,7 @@ Definition move (p : T2048.move * state) : state * message :=
   match next_board size s gen_values target m b with
   | iresult   => (st, if stuck b then m_lost else m_invalid)
   | lresult   => (st, m_lost)
-  | wresult   => (state_of_game s (make_move size m b), m_won)
+  | wresult b1 => (state_of_game s b1, m_won)
   | vresult s1 b1 => (state_of_game s1 b1, m_continue)
   end.
 

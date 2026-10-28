@@ -8,6 +8,16 @@
     # Used for that single system — every other one builds from unstable.
     nixpkgs-x86_64-darwin.url = "github:NixOS/nixpkgs/nixpkgs-26.05-darwin";
     flake-utils.url = "github:numtide/flake-utils";
+    # The game itself, tracking master. womeier/T2048 is thery's master plus
+    # the commit that has wresult carry the board of the winning move; back
+    # to thery/T2048 once that is merged there. Not a flake, just a source
+    # tree — flake.lock holds the rev it is pinned to, and
+    #   nix flake update t2048-src
+    # moves the pin to whatever master is then.
+    t2048-src = {
+      url = "github:womeier/T2048/master";
+      flake = false;
+    };
   };
 
   outputs =
@@ -16,6 +26,7 @@
       nixpkgs,
       nixpkgs-x86_64-darwin,
       flake-utils,
+      t2048-src,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -49,19 +60,12 @@
         rocqWithPackages =
           if intelDarwin then coqPackages.coq.withPackages else rocqPackages.rocq-core.withPackages;
 
-        t2048-rev = "8f8b5020b060bc0876cb16a6b8802a9ab21c1673";
-
         t2048 = mkRocqPackage {
           pname = "T2048";
           version = "dev";
-          owner = "thery";
+          owner = "womeier";
           repo = "T2048";
-          src = pkgs.fetchFromGitHub {
-            owner = "thery";
-            repo = "T2048";
-            rev = t2048-rev;
-            hash = "sha256-VvrMDv2Kt87c0Udrm3+KGbiSvw8RrjrMqmmyHwy6dwY=";
-          };
+          src = t2048-src;
 
           useCoq = true;
           namePrefix = [ "coq" ];

@@ -54,7 +54,8 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-x86_64-darwin": "nixpkgs-x86_64-darwin"
+        "nixpkgs-x86_64-darwin": "nixpkgs-x86_64-darwin",
+        "t2048-src": "t2048-src"
       }
     },
     "systems": {
@@ -69,6 +70,23 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "t2048-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793146533,
+        "narHash": "sha256-cejUnpFQhXaLCfU8hr6URSvgtx/aXm/K/d6Zyw/vF3Y=",
+        "owner": "womeier",
+        "repo": "T2048",
+        "rev": "26a9293a3168aa99d9c0a276062397e34f703fb9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "womeier",
+        "ref": "master",
+        "repo": "T2048",
         "type": "github"
       }
     }
